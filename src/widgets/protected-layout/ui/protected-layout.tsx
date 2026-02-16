@@ -22,7 +22,7 @@ export function ProtectedLayout() {
         <div className="mb-4 text-lg font-semibold">Admin</div>
 
         <nav className="space-y-1">
-          <NavLink to="/products" className={linkClass}>
+          <NavLink to="products" className={linkClass}>
             Products
           </NavLink>
         </nav>
@@ -35,7 +35,9 @@ export function ProtectedLayout() {
       </aside>
 
       <main className="p-6">
-        <Outlet />
+        <main className="p-6">
+          <Outlet />
+        </main>
       </main>
     </div>
   );

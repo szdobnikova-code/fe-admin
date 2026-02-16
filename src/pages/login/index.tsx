@@ -35,10 +35,10 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="h-screen flex items-center justify-center bg-muted/40">
       <form
         onSubmit={form.handleSubmit(onSubmit)}
-        className="w-full max-w-sm space-y-3 border rounded-xl p-6"
+        className="w-full max-w-sm space-y-4 border rounded-xl p-6"
       >
         <div className="text-lg font-semibold">Login</div>
 

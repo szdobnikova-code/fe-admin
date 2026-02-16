@@ -15,6 +15,10 @@ export function ProductsPage() {
   const order = (qs.get("order", "asc") as "asc" | "desc") || "asc";
   const take = Number(qs.get("take", "10"));
   const skip = Number(qs.get("skip", "0"));
+  const category = qs.get("category", "");
+  const brand = qs.get("brand", "");
+  const priceMin = qs.get("priceMin", "");
+  const priceMax = qs.get("priceMax", "");
 
   type State = {
     rows: Product[];
@@ -88,10 +92,6 @@ export function ProductsPage() {
 
   const canShowMore = rows.length < total;
 
-  function onSearch(v: string) {
-    qs.set({ q: v, skip: 0 }); // reset paging
-  }
-
   function toggleSort(field: string) {
     const nextOrder = sortBy === field && order === "asc" ? "desc" : "asc";
     qs.set({ sortBy: field, order: nextOrder, skip: 0 });
@@ -106,27 +106,75 @@ export function ProductsPage() {
 
   const viewRows = useMemo(() => rows, [rows]);
 
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-xl font-semibold">Products</div>
-          <div className="text-sm text-muted-foreground">
-            Loaded {rows.length} / {total} {loading ? "(loading...)" : ""}
-          </div>
-        </div>
+  const filteredRows = useMemo(() => {
+    const min = priceMin ? Number(priceMin) : null;
+    const max = priceMax ? Number(priceMax) : null;
 
-        <div className="flex gap-2">
-          <Input
-            value={q}
-            onChange={(e) => onSearch(e.target.value)}
-            placeholder="Search..."
-            className="w-64"
-          />
-          <Button variant="outline" onClick={() => qs.set({ q: "", skip: 0 })} disabled={!q}>
-            Clear
-          </Button>
+    return rows.filter((p) => {
+      if (category && (p.category ?? "").toLowerCase() !== category.toLowerCase()) return false;
+      if (brand && !(p.brand ?? "").toLowerCase().includes(brand.toLowerCase())) return false;
+      if (min !== null && p.price < min) return false;
+      if (max !== null && p.price > max) return false;
+      return true;
+    });
+  }, [rows, category, brand, priceMin, priceMax]);
+
+  return (
+    <div className="border-b pb-4 space-y-4">
+      <div>
+        <div className="text-xl font-semibold">Products</div>
+        <div className="text-sm text-muted-foreground">
+          Loaded {rows.length} / {total}. Shown {filteredRows.length}.
         </div>
+      </div>
+
+      {/* Рядок 2 — Пошук + фільтри */}
+      <div className="flex flex-wrap items-end gap-2">
+        <Input
+          value={q}
+          onChange={(e) => qs.set({ q: e.target.value, skip: 0 })}
+          placeholder="Search..."
+          className="w-64"
+        />
+
+        <Input
+          value={category}
+          onChange={(e) => qs.set({ category: e.target.value, skip: 0 })}
+          placeholder="Category"
+          className="w-48"
+        />
+
+        <Input
+          value={brand}
+          onChange={(e) => qs.set({ brand: e.target.value, skip: 0 })}
+          placeholder="Brand"
+          className="w-48"
+        />
+
+        <Input
+          inputMode="numeric"
+          value={priceMin}
+          onChange={(e) => qs.set({ priceMin: e.target.value, skip: 0 })}
+          placeholder="Price min"
+          className="w-32"
+        />
+
+        <Input
+          inputMode="numeric"
+          value={priceMax}
+          onChange={(e) => qs.set({ priceMax: e.target.value, skip: 0 })}
+          placeholder="Price max"
+          className="w-32"
+        />
+
+        <Button
+          variant="outline"
+          onClick={() =>
+            qs.set({ q: "", category: "", brand: "", priceMin: "", priceMax: "", skip: 0 })
+          }
+        >
+          Reset
+        </Button>
       </div>
 
       {error && <div className="text-sm text-red-600">{error}</div>}

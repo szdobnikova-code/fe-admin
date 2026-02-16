@@ -1,7 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 import { LoginPage } from "@/pages/login";
-import { ProductsPage } from "@/pages/products";
 import { AuthRoute } from "@/features/auth/auth-route.tsx";
+import { ProtectedLayout } from "@/widgets/protected-layout/ui/protected-layout.tsx";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -9,7 +9,7 @@ export const router = createBrowserRouter([
     path: "/products",
     element: (
       <AuthRoute>
-        <ProductsPage />
+        <ProtectedLayout />
       </AuthRoute>
     ),
   },

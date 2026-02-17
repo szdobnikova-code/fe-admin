@@ -91,7 +91,7 @@ export function UpsertProductDialog({ open, onOpenChange, product, onSuccess }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[520px]">
+      <DialogContent className="sm:max-w-[520px] !bg-white !opacity-100">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit product" : "Create product"}</DialogTitle>
         </DialogHeader>

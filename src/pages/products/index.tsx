@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useReducer } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import { getProducts } from "@/entities/product/api/products";
 import type { Product } from "@/entities/product/model/types";
 import { useQueryState } from "@/shared/lib/use-query-state";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/ui/table";
+import { UpsertProductDialog } from "@/features/products/upsert-product/ui/upsert-product-dialog.tsx";
 
 export function ProductsPage() {
   const qs = useQueryState();
@@ -30,9 +31,12 @@ export function ProductsPage() {
   type Action =
     | { type: "start" }
     | { type: "success"; rows: Product[]; total: number; append: boolean }
-    | { type: "error"; message: string };
+    | { type: "error"; message: string }
+    | { type: "upsert"; product: Product; mode: "create" | "edit" };
 
   const initialState: State = { rows: [], total: 0, loading: false, error: null };
+  const [upsertOpen, setUpsertOpen] = useState(false);
+  const [editing, setEditing] = useState<Product | null>(null);
 
   function reducer(state: State, action: Action): State {
     switch (action.type) {
@@ -48,6 +52,19 @@ export function ProductsPage() {
         };
       case "error":
         return { ...state, loading: false, error: action.message };
+      case "upsert": {
+        if (action.mode === "create") {
+          return {
+            ...state,
+            rows: [action.product, ...state.rows],
+            total: state.total + 1,
+          };
+        }
+        return {
+          ...state,
+          rows: state.rows.map((p) => (p.id === action.product.id ? action.product : p)),
+        };
+      }
       default:
         return state;
     }
@@ -126,6 +143,14 @@ export function ProductsPage() {
         <div className="text-sm text-muted-foreground">
           Loaded {rows.length} / {total}. Shown {filteredRows.length}.
         </div>
+        <Button
+          onClick={() => {
+            setEditing(null);
+            setUpsertOpen(true);
+          }}
+        >
+          Create product
+        </Button>
       </div>
 
       {/* Рядок 2 — Пошук + фільтри */}
@@ -208,7 +233,14 @@ export function ProductsPage() {
                 <TableCell>{p.brand}</TableCell>
                 <TableCell>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setEditing(p);
+                        setUpsertOpen(true);
+                      }}
+                    >
                       Edit
                     </Button>
                     <Button size="sm" variant="destructive">
@@ -235,6 +267,13 @@ export function ProductsPage() {
           Show more
         </Button>
       </div>
+
+      <UpsertProductDialog
+        open={upsertOpen}
+        onOpenChange={setUpsertOpen}
+        product={editing}
+        onSuccess={(saved, mode) => dispatch({ type: "upsert", product: saved, mode })}
+      />
     </div>
   );
 }

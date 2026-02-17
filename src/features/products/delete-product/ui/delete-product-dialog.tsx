@@ -3,6 +3,7 @@ import { deleteProduct } from "@/entities/product/api/products";
 import { Button } from "@/shared/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/shared/ui/dialog";
 import { useState } from "react";
+import { toast } from "sonner";
 
 type Props = {
   open: boolean;
@@ -21,10 +22,11 @@ export function DeleteProductDialog({ open, onOpenChange, product, onSuccess }: 
       setLoading(true);
       setError(null);
       await deleteProduct(product.id);
+      toast.success("Product deleted");
       onSuccess(product.id);
       onOpenChange(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed");
+      toast.error(e instanceof Error ? e.message : "Delete failed");
     } finally {
       setLoading(false);
     }

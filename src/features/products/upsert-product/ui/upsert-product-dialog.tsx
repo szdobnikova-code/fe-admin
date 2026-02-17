@@ -1,10 +1,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
-
 import type { Product } from "@/entities/product/model/types";
 import { createProduct, updateProduct } from "@/entities/product/api/products";
-
+import { toast } from "sonner";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/shared/ui/dialog";
@@ -19,8 +18,7 @@ import {
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-
-  product?: Product | null; // якщо є -> edit, якщо нема -> create
+  product?: Product | null;
   onSuccess: (saved: Product, mode: "create" | "edit") => void;
 };
 
@@ -80,12 +78,11 @@ export function UpsertProductDialog({ open, onOpenChange, product, onSuccess }: 
         ? await updateProduct(product.id, payload)
         : await createProduct(payload);
 
+      toast.success(product ? "Product updated" : "Product created");
       onSuccess(saved, product ? "edit" : "create");
       onOpenChange(false);
     } catch (e) {
-      form.setError("root", {
-        message: e instanceof Error ? e.message : "Request failed",
-      });
+      toast.error(e instanceof Error ? e.message : "Request failed");
     }
   }
 

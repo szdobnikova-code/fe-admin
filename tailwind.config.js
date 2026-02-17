@@ -13,6 +13,8 @@ export default {
                 "muted-foreground": "hsl(var(--muted-foreground))",
                 popover: "hsl(var(--popover))",
                 "popover-foreground": "hsl(var(--popover-foreground))",
+                primary: "hsl(var(--primary))",
+                "primary-foreground": "hsl(var(--primary-foreground))",
             },
         },
     },

@@ -65,19 +65,28 @@ export function UpsertProductDialog({ open, onOpenChange, product, onSuccess }: 
   }, [open, product, form]);
 
   async function submit(values: UpsertProductFormInput) {
-    const parsed: UpsertProductFormOutput = upsertProductSchema.parse(values);
-    const payload = {
-      title: parsed.title,
-      price: parsed.price,
-      stock: parsed.stock,
-      category: parsed.category,
-      brand: parsed.brand || undefined,
-    };
+    try {
+      const parsed: UpsertProductFormOutput = upsertProductSchema.parse(values);
 
-    const saved = product ? await updateProduct(product.id, payload) : await createProduct(payload);
+      const payload = {
+        title: parsed.title,
+        price: parsed.price,
+        stock: parsed.stock,
+        category: parsed.category,
+        brand: parsed.brand || undefined,
+      };
 
-    onSuccess(saved, product ? "edit" : "create");
-    onOpenChange(false);
+      const saved = product
+        ? await updateProduct(product.id, payload)
+        : await createProduct(payload);
+
+      onSuccess(saved, product ? "edit" : "create");
+      onOpenChange(false);
+    } catch (e) {
+      form.setError("root", {
+        message: e instanceof Error ? e.message : "Request failed",
+      });
+    }
   }
 
   return (

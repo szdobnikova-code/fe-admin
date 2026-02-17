@@ -6,6 +6,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/ui/table";
 import { UpsertProductDialog } from "@/features/products/upsert-product/ui/upsert-product-dialog.tsx";
+import {DeleteProductDialog} from "@/features/products/delete-product/ui/delete-product-dialog.tsx";
 
 export function ProductsPage() {
   const qs = useQueryState();
@@ -21,6 +22,11 @@ export function ProductsPage() {
   const priceMin = qs.get("priceMin", "");
   const priceMax = qs.get("priceMax", "");
 
+  const [upsertOpen, setUpsertOpen] = useState(false);
+  const [editing, setEditing] = useState<Product | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState<Product | null>(null);
+
   type State = {
     rows: Product[];
     total: number;
@@ -32,11 +38,10 @@ export function ProductsPage() {
     | { type: "start" }
     | { type: "success"; rows: Product[]; total: number; append: boolean }
     | { type: "error"; message: string }
-    | { type: "upsert"; product: Product; mode: "create" | "edit" };
+    | { type: "upsert"; product: Product; mode: "create" | "edit" }
+    | { type: "remove"; id: number };
 
   const initialState: State = { rows: [], total: 0, loading: false, error: null };
-  const [upsertOpen, setUpsertOpen] = useState(false);
-  const [editing, setEditing] = useState<Product | null>(null);
 
   function reducer(state: State, action: Action): State {
     switch (action.type) {
@@ -65,6 +70,12 @@ export function ProductsPage() {
           rows: state.rows.map((p) => (p.id === action.product.id ? action.product : p)),
         };
       }
+      case "remove":
+        return {
+          ...state,
+          rows: state.rows.filter((p) => p.id !== action.id),
+          total: Math.max(0, state.total - 1),
+        };
       default:
         return state;
     }
@@ -138,7 +149,7 @@ export function ProductsPage() {
 
   return (
     <div className="border-b pb-4 space-y-4">
-      <div>
+      <div className="flex items-center justify-between">
         <div className="text-xl font-semibold">Products</div>
         <div className="text-sm text-muted-foreground">
           Loaded {rows.length} / {total}. Shown {filteredRows.length}.
@@ -243,7 +254,14 @@ export function ProductsPage() {
                     >
                       Edit
                     </Button>
-                    <Button size="sm" variant="destructive">
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => {
+                        setDeleting(p);
+                        setDeleteOpen(true);
+                      }}
+                    >
                       Delete
                     </Button>
                   </div>
@@ -273,6 +291,13 @@ export function ProductsPage() {
         onOpenChange={setUpsertOpen}
         product={editing}
         onSuccess={(saved, mode) => dispatch({ type: "upsert", product: saved, mode })}
+      />
+
+      <DeleteProductDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        product={deleting}
+        onSuccess={(id) => dispatch({ type: "remove", id })}
       />
     </div>
   );

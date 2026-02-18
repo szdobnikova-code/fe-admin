@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useReducer, useState } from "react";
 import { Pencil, Plus, Trash2, X, SlidersHorizontal } from "lucide-react";
 
-import { getProducts } from "@/entities/product/api/products";
-import type { Product } from "@/entities/product/model/types";
+import { getProducts } from "@/entities/product";
+import type { Product } from "@/entities/product";
 import { useQueryState } from "@/shared/lib/use-query-state";
 
 import { Button } from "@/shared/ui/button";
@@ -17,6 +17,8 @@ import {
   ProductsFiltersDialog,
   type ProductsFiltersDraft,
 } from "@/pages/products/ui/products-filters-dialog";
+
+import { ProductsSearchInput } from "@/pages/products/ui/search-input";
 
 const ALL_CATEGORIES = "__all__";
 
@@ -40,7 +42,6 @@ function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "start":
       return { ...state, loading: true, error: null };
-
     case "success":
       return {
         ...state,
@@ -49,34 +50,32 @@ function reducer(state: State, action: Action): State {
         total: action.total,
         rows: action.append ? [...state.rows, ...action.rows] : action.rows,
       };
-
     case "error":
       return { ...state, loading: false, error: action.message };
-
     case "upsert": {
       if (action.mode === "create") {
-        return {
-          ...state,
-          rows: [action.product, ...state.rows],
-          total: state.total + 1,
-        };
+        return { ...state, rows: [action.product, ...state.rows], total: state.total + 1 };
       }
       return {
         ...state,
         rows: state.rows.map((p) => (p.id === action.product.id ? action.product : p)),
       };
     }
-
     case "remove":
       return {
         ...state,
         rows: state.rows.filter((p) => p.id !== action.id),
         total: Math.max(0, state.total - 1),
       };
-
     default:
       return state;
   }
+}
+
+function clampInt(raw: string, fallback: number, min: number) {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.trunc(n));
 }
 
 export function ProductsPage() {
@@ -86,8 +85,9 @@ export function ProductsPage() {
   const q = qs.get("q", "");
   const sortBy = qs.get("sortBy", "");
   const order = (qs.get("order", "asc") as "asc" | "desc") || "asc";
-  const take = Number(qs.get("take", "10"));
-  const skip = Number(qs.get("skip", "0"));
+
+  const take = clampInt(qs.get("take", "10"), 10, 1);
+  const skip = clampInt(qs.get("skip", "0"), 0, 0);
 
   const category = qs.get("category", "");
   const brand = qs.get("brand", "");
@@ -104,6 +104,17 @@ export function ProductsPage() {
 
   const [{ rows, total, loading, error }, dispatch] = useReducer(reducer, initialState);
 
+  // debounce timers stored in module scope via window (no refs, no effects)
+  // (handlers below clear/recreate timers)
+  const debounceQKey = "__products_q_timer__";
+  const debounceBrandKey = "__products_brand_timer__";
+
+  const filtersActive = Boolean(category || brand || priceMin || priceMax);
+
+  // client-side filters => load large batch once, no show more
+  const effectiveTake = filtersActive ? 1000 : take;
+  const effectiveSkip = filtersActive ? 0 : skip;
+
   const categories = useMemo(() => {
     const set = new Set<string>();
     rows.forEach((p) => {
@@ -112,39 +123,41 @@ export function ProductsPage() {
     return Array.from(set).sort();
   }, [rows]);
 
+  // Fetch when query changes (AbortController ok, no setState here)
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
 
     dispatch({ type: "start" });
 
     getProducts({
       q: q || undefined,
-      take,
-      skip,
+      take: effectiveTake,
+      skip: effectiveSkip,
       sortBy: sortBy || undefined,
       order,
+      signal: controller.signal,
     })
       .then((res) => {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
+
         dispatch({
           type: "success",
           rows: res.products,
           total: res.total,
-          append: skip !== 0,
+          append: !filtersActive && effectiveSkip > 0,
         });
       })
       .catch((e) => {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
+
         dispatch({
           type: "error",
           message: e instanceof Error ? e.message : "Failed to load products",
         });
       });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [q, sortBy, order, take, skip]);
+    return () => controller.abort();
+  }, [q, sortBy, order, effectiveTake, effectiveSkip, filtersActive]);
 
   const filteredRows = useMemo(() => {
     const min = priceMin ? Number(priceMin) : null;
@@ -153,13 +166,13 @@ export function ProductsPage() {
     return rows.filter((p) => {
       if (category && (p.category ?? "").toLowerCase() !== category.toLowerCase()) return false;
       if (brand && !(p.brand ?? "").toLowerCase().includes(brand.toLowerCase())) return false;
-      if (min !== null && p.price < min) return false;
-      if (max !== null && p.price > max) return false;
+      if (min !== null && Number.isFinite(min) && p.price < min) return false;
+      if (max !== null && Number.isFinite(max) && p.price > max) return false;
       return true;
     });
   }, [rows, category, brand, priceMin, priceMax]);
 
-  const canShowMore = rows.length < total;
+  const canShowMore = !filtersActive && rows.length < total;
 
   function toggleSort(field: string) {
     const nextOrder = sortBy === field && order === "asc" ? "desc" : "asc";
@@ -167,34 +180,45 @@ export function ProductsPage() {
   }
 
   function showMore() {
+    if (!canShowMore || loading) return;
     qs.set({ skip: skip + take });
   }
 
   const titleSortMark = sortBy === "title" ? (order === "asc" ? " ↑" : " ↓") : "";
   const priceSortMark = sortBy === "price" ? (order === "asc" ? " ↑" : " ↓") : "";
 
+  // ✅ debounced URL updates in handlers (no effects, no refs)
+  function onQChange(next: string) {
+    // @ts-expect-error attach to window
+    const prev = window[debounceQKey] as number | undefined;
+    if (prev) window.clearTimeout(prev);
+
+    // @ts-expect-error attach to window
+    window[debounceQKey] = window.setTimeout(() => {
+      if (next !== q) qs.set({ q: next, skip: 0 });
+    }, 350);
+  }
+
+  function onBrandChange(next: string) {
+    // @ts-expect-error attach to window
+    const prev = window[debounceBrandKey] as number | undefined;
+    if (prev) window.clearTimeout(prev);
+
+    // @ts-expect-error attach to window
+    window[debounceBrandKey] = window.setTimeout(() => {
+      if (next !== brand) qs.set({ brand: next, skip: 0 });
+    }, 350);
+  }
+
   const desktopFilters = (
     <div className="hidden md:flex flex-wrap items-center gap-3">
-      {/* Search */}
-      <div className="relative w-[240px]">
-        <Input
-          placeholder="Search products..."
-          value={q}
-          onChange={(e) => qs.set({ q: e.target.value, skip: 0 })}
-          className="h-10 pr-9"
-        />
-        {q && (
-          <button
-            type="button"
-            onClick={() => qs.set({ q: "", skip: 0 })}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            aria-label="Clear search"
-            title="Clear"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
+      <ProductsSearchInput
+        key={`q-${q}`}
+        className="w-[240px]"
+        placeholder="Search products..."
+        defaultValue={q}
+        onDebouncedChange={onQChange}
+      />
 
       {/* Category */}
       <div className="relative w-[210px]">
@@ -228,28 +252,15 @@ export function ProductsPage() {
         )}
       </div>
 
-      {/* Brand */}
-      <div className="relative w-[170px]">
-        <Input
-          placeholder="Brand"
-          value={brand}
-          onChange={(e) => qs.set({ brand: e.target.value, skip: 0 })}
-          className="h-10 pr-9"
-        />
-        {brand && (
-          <button
-            type="button"
-            onClick={() => qs.set({ brand: "", skip: 0 })}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            aria-label="Clear brand"
-            title="Clear"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
+      <ProductsSearchInput
+        key={`brand-${brand}`}
+        className="w-[170px]"
+        placeholder="Brand"
+        defaultValue={brand}
+        clearAriaLabel="Clear brand"
+        onDebouncedChange={onBrandChange}
+      />
 
-      {/* Price min */}
       <div className="relative w-[130px]">
         <Input
           type="number"
@@ -271,7 +282,6 @@ export function ProductsPage() {
         )}
       </div>
 
-      {/* Price max */}
       <div className="relative w-[130px]">
         <Input
           type="number"
@@ -297,25 +307,13 @@ export function ProductsPage() {
 
   const mobileFiltersRow = (
     <div className="md:hidden flex items-center gap-3">
-      <div className="relative flex-1">
-        <Input
-          placeholder="Search products..."
-          value={q}
-          onChange={(e) => qs.set({ q: e.target.value, skip: 0 })}
-          className="h-10 pr-9"
-        />
-        {q && (
-          <button
-            type="button"
-            onClick={() => qs.set({ q: "", skip: 0 })}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            aria-label="Clear search"
-            title="Clear"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
+      <ProductsSearchInput
+        key={`q-m-${q}`}
+        className="flex-1"
+        placeholder="Search products..."
+        defaultValue={q}
+        onDebouncedChange={onQChange}
+      />
 
       <Button variant="outline" className="h-10" onClick={() => setFiltersOpen(true)}>
         <SlidersHorizontal className="h-4 w-4 mr-2" />
@@ -351,8 +349,8 @@ export function ProductsPage() {
 
       {error && <div className="text-sm text-red-600">{error}</div>}
 
-      <div className="border overflow-hidden bg-background">
-        <Table>
+      <div className="border overflow-x-auto bg-background">
+        <Table className="min-w-[900px]">
           <TableHeader className="bg-muted/40">
             <TableRow>
               <TableHead className="w-16">ID</TableHead>
@@ -425,25 +423,27 @@ export function ProductsPage() {
 
       <div className="mt-6 flex items-center justify-center gap-2 text-sm">
         <span className="text-muted-foreground">
-          Loaded {rows.length} / {total}. Shown {filteredRows.length}
+          Loaded {rows.length}
+          {filtersActive ? "" : ` / ${total}`}. Shown {filteredRows.length}
         </span>
 
-        <button
-          type="button"
-          onClick={showMore}
-          disabled={!canShowMore || loading}
-          className={[
-            "font-semibold",
-            !canShowMore || loading
-              ? "text-muted-foreground cursor-not-allowed"
-              : "text-blue-600 hover:underline",
-          ].join(" ")}
-        >
-          Show more
-        </button>
+        {!filtersActive && (
+          <button
+            type="button"
+            onClick={showMore}
+            disabled={!canShowMore || loading}
+            className={[
+              "font-semibold",
+              !canShowMore || loading
+                ? "text-muted-foreground cursor-not-allowed"
+                : "text-blue-600 hover:underline",
+            ].join(" ")}
+          >
+            Show more
+          </button>
+        )}
       </div>
 
-      {/* Mobile Filters Dialog (separate file) */}
       <ProductsFiltersDialog
         open={filtersOpen}
         onOpenChange={setFiltersOpen}
@@ -473,6 +473,7 @@ export function ProductsPage() {
         open={upsertOpen}
         onOpenChange={setUpsertOpen}
         product={editing}
+        categories={categories}
         onSuccess={(saved, mode) => dispatch({ type: "upsert", product: saved, mode })}
       />
 

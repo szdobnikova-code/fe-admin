@@ -1,8 +1,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useMemo } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import type { Product } from "@/entities/product/model/types";
-import { createProduct, updateProduct } from "@/entities/product/api/products";
+import { createProduct, updateProduct } from "@/features/products/upsert-product/api/products";
 import { toast } from "sonner";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -19,53 +19,35 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   product?: Product | null;
+  categories: string[]; // ✅ dynamic categories from ProductsPage
   onSuccess: (saved: Product, mode: "create" | "edit") => void;
 };
 
-const CATEGORY_OPTIONS = [
-  "smartphones",
-  "laptops",
-  "fragrances",
-  "skincare",
-  "groceries",
-  "home-decoration",
-];
-
-export function UpsertProductDialog({ open, onOpenChange, product, onSuccess }: Props) {
+export function UpsertProductDialog({ open, onOpenChange, product, categories, onSuccess }: Props) {
   const isEdit = Boolean(product);
+
+  // ✅ stable defaults derived from props
+  const defaultValues = useMemo<UpsertProductFormInput>(
+    () => ({
+      title: product?.title ?? "",
+      price: product?.price ?? 1,
+      stock: product?.stock ?? 0,
+      category: product?.category ?? "",
+      brand: product?.brand ?? "",
+    }),
+    [product],
+  );
+
+  // ✅ key forces RHF to re-initialize when switching create/edit or editing another row
+  const formKey = product?.id ?? "new";
 
   const form = useForm<UpsertProductFormInput>({
     resolver: zodResolver(upsertProductSchema),
-    defaultValues: {
-      title: "",
-      price: 1,
-      stock: 0,
-      category: "",
-      brand: "",
-    },
+    defaultValues,
+    mode: "onSubmit",
   });
 
-  useEffect(() => {
-    if (!open) return;
-
-    if (product) {
-      form.reset({
-        title: product.title ?? "",
-        price: product.price ?? 1,
-        stock: product.stock ?? 0,
-        category: product.category ?? "",
-        brand: product.brand ?? "",
-      });
-    } else {
-      form.reset({
-        title: "",
-        price: 1,
-        stock: 0,
-        category: "",
-        brand: "",
-      });
-    }
-  }, [open, product, form]);
+  const categoryValue = useWatch({ control: form.control, name: "category" });
 
   async function submit(values: UpsertProductFormInput) {
     try {
@@ -84,7 +66,6 @@ export function UpsertProductDialog({ open, onOpenChange, product, onSuccess }: 
         : await createProduct(payload);
 
       toast.success(isEdit ? "Product updated" : "Product created");
-
       onSuccess(saved, isEdit ? "edit" : "create");
       onOpenChange(false);
     } catch (e) {
@@ -105,7 +86,7 @@ export function UpsertProductDialog({ open, onOpenChange, product, onSuccess }: 
         <div className="border-t" />
 
         {/* FORM */}
-        <form onSubmit={form.handleSubmit(submit)} className="px-5 pt-4 space-y-4">
+        <form key={formKey} onSubmit={form.handleSubmit(submit)} className="px-5 pt-4 space-y-4">
           {/* Title */}
           <div className="space-y-1.5">
             <div className="text-sm font-medium">Title</div>
@@ -119,32 +100,43 @@ export function UpsertProductDialog({ open, onOpenChange, product, onSuccess }: 
           <div className="space-y-1.5">
             <div className="text-sm font-medium">Price</div>
             <Input className="h-10" type="number" {...form.register("price")} />
+            {form.formState.errors.price?.message && (
+              <div className="text-xs text-destructive">{form.formState.errors.price.message}</div>
+            )}
           </div>
 
           {/* Stock */}
           <div className="space-y-1.5">
             <div className="text-sm font-medium">Stock</div>
             <Input className="h-10" type="number" {...form.register("stock")} />
+            {form.formState.errors.stock?.message && (
+              <div className="text-xs text-destructive">{form.formState.errors.stock.message}</div>
+            )}
           </div>
 
           {/* Category */}
           <div className="space-y-1.5">
             <div className="text-sm font-medium">Category</div>
             <Select
-              value={form.watch("category")}
+              value={categoryValue || ""}
               onValueChange={(v) => form.setValue("category", v, { shouldValidate: true })}
             >
               <SelectTrigger className="h-10">
                 <SelectValue placeholder="Select category" />
               </SelectTrigger>
               <SelectContent>
-                {CATEGORY_OPTIONS.map((c) => (
+                {categories.map((c) => (
                   <SelectItem key={c} value={c}>
                     {c}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {form.formState.errors.category?.message && (
+              <div className="text-xs text-destructive">
+                {form.formState.errors.category.message}
+              </div>
+            )}
           </div>
 
           {/* Brand */}
@@ -152,6 +144,11 @@ export function UpsertProductDialog({ open, onOpenChange, product, onSuccess }: 
             <div className="text-sm font-medium">Brand</div>
             <Input className="h-10" {...form.register("brand")} />
           </div>
+
+          {/* Root error if you ever set it */}
+          {form.formState.errors.root?.message && (
+            <div className="text-xs text-destructive">{form.formState.errors.root.message}</div>
+          )}
 
           {/* Divider */}
           <div className="-mx-5 border-t mt-2" />

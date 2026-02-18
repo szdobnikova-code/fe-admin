@@ -1,5 +1,5 @@
-import { apiService } from "@/shared/api/api-service";
-import type { ProductsResponse, Product } from "../model/types";
+import type { ProductsResponse } from "../model/types";
+import { authed } from "@/entities/session/api/authed";
 
 export function getProducts(params: {
   q?: string;
@@ -7,36 +7,19 @@ export function getProducts(params: {
   skip: number;
   sortBy?: string;
   order?: "asc" | "desc";
+  signal?: AbortSignal;
 }) {
-  const { q, take, skip, sortBy, order } = params;
+  const { q, take, skip, sortBy, order, signal } = params;
 
   const sp = new URLSearchParams();
   sp.set("limit", String(take));
   sp.set("skip", String(skip));
-
-  if (q) sp.set("q", q);
   if (sortBy) sp.set("sortBy", sortBy);
   if (order) sp.set("order", order);
 
-  const path = q ? `/products/search?${sp.toString()}` : `/products?${sp.toString()}`;
+  const path = q
+    ? `/products/search?q=${encodeURIComponent(q)}&${sp.toString()}`
+    : `/products?${sp.toString()}`;
 
-  return apiService<ProductsResponse>(path);
-}
-
-export function createProduct(payload: Partial<Product>) {
-  return apiService<Product>("/products/add", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function updateProduct(id: number, payload: Partial<Product>) {
-  return apiService<Product>(`/products/${id}`, {
-    method: "PUT",
-    body: JSON.stringify(payload),
-  });
-}
-
-export function deleteProduct(id: number) {
-  return apiService<{ id: number }>(`/products/${id}`, { method: "DELETE" });
+  return authed<ProductsResponse>(path, undefined, signal);
 }

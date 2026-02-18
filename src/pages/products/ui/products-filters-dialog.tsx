@@ -23,9 +23,19 @@ type Props = {
 
   // apply draft to URL (parent decides how)
   onApply: (next: ProductsFiltersDraft) => void;
+
+  // reset URL filters (parent decides how)
+  onReset: () => void;
 };
 
-export function ProductsFiltersDialog({ open, onOpenChange, categories, value, onApply }: Props) {
+export function ProductsFiltersDialog({
+  open,
+  onOpenChange,
+  categories,
+  value,
+  onApply,
+  onReset,
+}: Props) {
   const [draft, setDraft] = useState<ProductsFiltersDraft>(value);
 
   const categoryValue = useMemo(
@@ -59,13 +69,8 @@ export function ProductsFiltersDialog({ open, onOpenChange, categories, value, o
   }
 
   function cancel() {
-    // revert draft to URL values and close
-    setDraft({
-      category: value.category,
-      brand: value.brand,
-      priceMin: value.priceMin,
-      priceMax: value.priceMax,
-    });
+    // Cancel = Reset (your requirement)
+    onReset();
     onOpenChange(false);
   }
 

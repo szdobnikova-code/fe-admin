@@ -6,6 +6,7 @@ import { useStores } from "@/app/providers/stores-context";
 import { loginService } from "@/features/auth/login/service.ts";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
+import { LockKeyhole } from "lucide-react";
 
 const schema = z.object({
   username: z.string().min(1, "Required"),
@@ -35,31 +36,68 @@ export function LoginPage() {
   }
 
   return (
-    <div className="h-screen flex items-center justify-center bg-muted/40">
-      <form
-        onSubmit={form.handleSubmit(onSubmit)}
-        className="w-full max-w-sm space-y-4 border rounded-xl p-6"
-      >
-        <div className="text-lg font-semibold">Login</div>
+    <div className="min-h-screen bg-muted/30 flex items-center justify-center px-4">
+      <div className="w-full max-w-[420px] rounded-xl bg-background border shadow-sm p-6">
+        {/* Icon */}
+        <div className="mb-4 flex justify-center">
+          <div className="h-12 w-12 rounded-xl bg-blue-50 flex items-center justify-center">
+            <LockKeyhole className="h-6 w-6 text-blue-600" />
+          </div>
+        </div>
 
-        <Input placeholder="username" {...form.register("username")} />
-        {form.formState.errors.username?.message && (
-          <div className="text-sm text-red-600">{form.formState.errors.username.message}</div>
-        )}
+        {/* Header */}
+        <div className="text-center space-y-1 mb-6">
+          <div className="text-2xl font-semibold tracking-tight">Admin Panel Login</div>
+          <div className="text-sm text-muted-foreground">
+            Use your credentials to access admin panel.
+          </div>
+        </div>
 
-        <Input type="password" placeholder="password" {...form.register("password")} />
-        {form.formState.errors.password?.message && (
-          <div className="text-sm text-red-600">{form.formState.errors.password.message}</div>
-        )}
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          {/* Username */}
+          <div className="space-y-1.5">
+            <div className="text-sm font-medium">Username</div>
+            <Input className="h-10" placeholder="username" {...form.register("username")} />
+            {form.formState.errors.username?.message && (
+              <div className="text-xs text-destructive">
+                {form.formState.errors.username.message}
+              </div>
+            )}
+          </div>
 
-        {form.formState.errors.root?.message && (
-          <div className="text-sm text-red-600">{form.formState.errors.root.message}</div>
-        )}
+          {/* Password */}
+          <div className="space-y-1.5">
+            <div className="text-sm font-medium">Password</div>
+            <Input
+              className="h-10"
+              type="password"
+              placeholder="password"
+              {...form.register("password")}
+            />
+            {form.formState.errors.password?.message && (
+              <div className="text-xs text-destructive">
+                {form.formState.errors.password.message}
+              </div>
+            )}
+          </div>
 
-        <Button className="w-full" type="submit" disabled={form.formState.isSubmitting}>
-          Sign in
-        </Button>
-      </form>
+          {form.formState.errors.root?.message && (
+            <div className="text-sm text-destructive">{form.formState.errors.root.message}</div>
+          )}
+
+          <Button
+            className="h-11 w-full bg-blue-600 text-white hover:bg-blue-700"
+            type="submit"
+            disabled={form.formState.isSubmitting}
+          >
+            {form.formState.isSubmitting ? "Signing in..." : "Sign in"}
+          </Button>
+        </form>
+
+        <div className="mt-5 text-xs text-muted-foreground text-center">
+          Demo credentials: <span className="font-medium text-foreground">emilys / emilyspass</span>
+        </div>
+      </div>
     </div>
   );
 }

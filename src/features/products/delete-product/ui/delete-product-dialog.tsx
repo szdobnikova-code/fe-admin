@@ -1,7 +1,7 @@
 import type { Product } from "@/entities/product/model/types";
 import { deleteProduct } from "@/entities/product/api/products";
 import { Button } from "@/shared/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/shared/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/dialog";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -34,27 +34,47 @@ export function DeleteProductDialog({ open, onOpenChange, product, onSuccess }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
-        <DialogHeader>
-          <DialogTitle>Delete product</DialogTitle>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-[480px] !p-0 !bg-white !opacity-100">
+        {/* HEADER */}
+        <div className="px-6 py-5">
+          <DialogTitle className="text-xl font-semibold tracking-tight">Delete product</DialogTitle>
+        </div>
 
-        <div className="space-y-2">
-          <div className="text-sm">
-            Are you sure you want to delete <span className="font-medium">{product?.title}</span>?
-          </div>
-          <div className="text-sm text-muted-foreground">This action cannot be undone.</div>
+        <div className="border-t" />
+
+        {/* BODY */}
+        <div className="px-6 py-5 space-y-2">
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete&nbsp;
+            <span className="text-black font-bold">{product?.title}</span>
+          </p>
+
+          <p className="text-sm text-muted-foreground">This action cannot be undone.</p>
           {error && <div className="text-sm text-red-600">{error}</div>}
         </div>
 
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
+        <div className="border-t" />
+
+        {/* FOOTER */}
+        <div className="px-6 py-4 flex justify-end gap-3">
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-10 px-4 hover:bg-muted/60"
+            onClick={() => onOpenChange(false)}
+            disabled={loading}
+          >
             Cancel
           </Button>
-          <Button variant="destructive" onClick={onDelete} disabled={!product || loading}>
+
+          <Button
+            type="button"
+            className="h-10 px-4 bg-red-600 text-white hover:bg-red-700"
+            onClick={onDelete}
+          >
             Delete
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

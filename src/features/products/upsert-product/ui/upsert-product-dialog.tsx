@@ -6,7 +6,7 @@ import { createProduct, updateProduct } from "@/entities/product/api/products";
 import { toast } from "sonner";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/shared/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/ui/select";
 
 import {
@@ -45,7 +45,6 @@ export function UpsertProductDialog({ open, onOpenChange, product, onSuccess }: 
     },
   });
 
-  // Коли відкрили модалку — підставити значення для edit або скинути для create
   useEffect(() => {
     if (!open) return;
 
@@ -58,7 +57,13 @@ export function UpsertProductDialog({ open, onOpenChange, product, onSuccess }: 
         brand: product.brand ?? "",
       });
     } else {
-      form.reset({ title: "", price: 1, stock: 0, category: "", brand: "" });
+      form.reset({
+        title: "",
+        price: 1,
+        stock: 0,
+        category: "",
+        brand: "",
+      });
     }
   }, [open, product, form]);
 
@@ -78,8 +83,9 @@ export function UpsertProductDialog({ open, onOpenChange, product, onSuccess }: 
         ? await updateProduct(product.id, payload)
         : await createProduct(payload);
 
-      toast.success(product ? "Product updated" : "Product created");
-      onSuccess(saved, product ? "edit" : "create");
+      toast.success(isEdit ? "Product updated" : "Product created");
+
+      onSuccess(saved, isEdit ? "edit" : "create");
       onOpenChange(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Request failed");
@@ -88,87 +94,88 @@ export function UpsertProductDialog({ open, onOpenChange, product, onSuccess }: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[520px] !bg-white !opacity-100">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit product" : "Create product"}</DialogTitle>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-[520px] !p-0 !bg-white !opacity-100">
+        {/* HEADER */}
+        <div className="px-5 py-5">
+          <DialogTitle className="text-xl font-semibold">
+            {isEdit ? "Edit product" : "Create product"}
+          </DialogTitle>
+        </div>
 
-        <form onSubmit={form.handleSubmit(submit)} className="space-y-4">
-          <div className="space-y-1">
-            <div className="text-sm">Title</div>
-            <Input placeholder="iPhone 14" {...form.register("title")} />
+        <div className="border-t" />
+
+        {/* FORM */}
+        <form onSubmit={form.handleSubmit(submit)} className="px-5 pt-4 space-y-4">
+          {/* Title */}
+          <div className="space-y-1.5">
+            <div className="text-sm font-medium">Title</div>
+            <Input className="h-10" {...form.register("title")} />
             {form.formState.errors.title?.message && (
-              <div className="text-sm text-red-600">{form.formState.errors.title.message}</div>
+              <div className="text-xs text-destructive">{form.formState.errors.title.message}</div>
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <div className="text-sm">Price</div>
-              <Input inputMode="decimal" placeholder="999" {...form.register("price")} />
-              {form.formState.errors.price?.message && (
-                <div className="text-sm text-red-600">{form.formState.errors.price.message}</div>
-              )}
-            </div>
-
-            <div className="space-y-1">
-              <div className="text-sm">Stock</div>
-              <Input inputMode="numeric" placeholder="10" {...form.register("stock")} />
-              {form.formState.errors.stock?.message && (
-                <div className="text-sm text-red-600">{form.formState.errors.stock.message}</div>
-              )}
-            </div>
+          {/* Price */}
+          <div className="space-y-1.5">
+            <div className="text-sm font-medium">Price</div>
+            <Input className="h-10" type="number" {...form.register("price")} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <div className="text-sm">Category</div>
-
-              <Select
-                value={form.watch("category")}
-                onValueChange={(v) => form.setValue("category", v, { shouldValidate: true })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORY_OPTIONS.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {form.formState.errors.category?.message && (
-                <div className="text-sm text-red-600">{form.formState.errors.category.message}</div>
-              )}
-            </div>
-
-            <div className="space-y-1">
-              <div className="text-sm">Brand</div>
-              <Input placeholder="Apple" {...form.register("brand")} />
-            </div>
+          {/* Stock */}
+          <div className="space-y-1.5">
+            <div className="text-sm font-medium">Stock</div>
+            <Input className="h-10" type="number" {...form.register("stock")} />
           </div>
 
-          {form.formState.errors.root?.message && (
-            <div className="text-sm text-red-600">{form.formState.errors.root.message}</div>
-          )}
+          {/* Category */}
+          <div className="space-y-1.5">
+            <div className="text-sm font-medium">Category</div>
+            <Select
+              value={form.watch("category")}
+              onValueChange={(v) => form.setValue("category", v, { shouldValidate: true })}
+            >
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORY_OPTIONS.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-          <DialogFooter className="gap-2">
+          {/* Brand */}
+          <div className="space-y-1.5">
+            <div className="text-sm font-medium">Brand</div>
+            <Input className="h-10" {...form.register("brand")} />
+          </div>
+
+          {/* Divider */}
+          <div className="-mx-5 border-t mt-2" />
+
+          {/* FOOTER */}
+          <div className="py-3 flex justify-end gap-3">
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
+              className="h-10 px-4 hover:bg-muted/60"
               onClick={() => onOpenChange(false)}
               disabled={form.formState.isSubmitting}
             >
               Cancel
             </Button>
 
-            <Button type="submit" disabled={form.formState.isSubmitting}>
+            <Button
+              type="submit"
+              className="h-10 px-4 bg-blue-600 text-white hover:bg-blue-700"
+              disabled={form.formState.isSubmitting}
+            >
               {isEdit ? "Save" : "Create"}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

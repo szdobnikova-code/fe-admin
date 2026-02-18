@@ -1,12 +1,83 @@
 import { useEffect, useMemo, useReducer, useState } from "react";
+import { Pencil, Plus, Trash2, X, SlidersHorizontal } from "lucide-react";
+
 import { getProducts } from "@/entities/product/api/products";
 import type { Product } from "@/entities/product/model/types";
 import { useQueryState } from "@/shared/lib/use-query-state";
+
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/ui/table";
-import { UpsertProductDialog } from "@/features/products/upsert-product/ui/upsert-product-dialog.tsx";
-import {DeleteProductDialog} from "@/features/products/delete-product/ui/delete-product-dialog.tsx";
+
+import { UpsertProductDialog } from "@/features/products/upsert-product/ui/upsert-product-dialog";
+import { DeleteProductDialog } from "@/features/products/delete-product/ui/delete-product-dialog";
+
+import {
+  ProductsFiltersDialog,
+  type ProductsFiltersDraft,
+} from "@/pages/products/ui/products-filters-dialog";
+
+const ALL_CATEGORIES = "__all__";
+
+type State = {
+  rows: Product[];
+  total: number;
+  loading: boolean;
+  error: string | null;
+};
+
+type Action =
+  | { type: "start" }
+  | { type: "success"; rows: Product[]; total: number; append: boolean }
+  | { type: "error"; message: string }
+  | { type: "upsert"; product: Product; mode: "create" | "edit" }
+  | { type: "remove"; id: number };
+
+const initialState: State = { rows: [], total: 0, loading: false, error: null };
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case "start":
+      return { ...state, loading: true, error: null };
+
+    case "success":
+      return {
+        ...state,
+        loading: false,
+        error: null,
+        total: action.total,
+        rows: action.append ? [...state.rows, ...action.rows] : action.rows,
+      };
+
+    case "error":
+      return { ...state, loading: false, error: action.message };
+
+    case "upsert": {
+      if (action.mode === "create") {
+        return {
+          ...state,
+          rows: [action.product, ...state.rows],
+          total: state.total + 1,
+        };
+      }
+      return {
+        ...state,
+        rows: state.rows.map((p) => (p.id === action.product.id ? action.product : p)),
+      };
+    }
+
+    case "remove":
+      return {
+        ...state,
+        rows: state.rows.filter((p) => p.id !== action.id),
+        total: Math.max(0, state.total - 1),
+      };
+
+    default:
+      return state;
+  }
+}
 
 export function ProductsPage() {
   const qs = useQueryState();
@@ -17,73 +88,30 @@ export function ProductsPage() {
   const order = (qs.get("order", "asc") as "asc" | "desc") || "asc";
   const take = Number(qs.get("take", "10"));
   const skip = Number(qs.get("skip", "0"));
+
   const category = qs.get("category", "");
   const brand = qs.get("brand", "");
   const priceMin = qs.get("priceMin", "");
   const priceMax = qs.get("priceMax", "");
 
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
   const [upsertOpen, setUpsertOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
+
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState<Product | null>(null);
 
-  type State = {
-    rows: Product[];
-    total: number;
-    loading: boolean;
-    error: string | null;
-  };
-
-  type Action =
-    | { type: "start" }
-    | { type: "success"; rows: Product[]; total: number; append: boolean }
-    | { type: "error"; message: string }
-    | { type: "upsert"; product: Product; mode: "create" | "edit" }
-    | { type: "remove"; id: number };
-
-  const initialState: State = { rows: [], total: 0, loading: false, error: null };
-
-  function reducer(state: State, action: Action): State {
-    switch (action.type) {
-      case "start":
-        return { ...state, loading: true, error: null };
-      case "success":
-        return {
-          ...state,
-          loading: false,
-          error: null,
-          total: action.total,
-          rows: action.append ? [...state.rows, ...action.rows] : action.rows,
-        };
-      case "error":
-        return { ...state, loading: false, error: action.message };
-      case "upsert": {
-        if (action.mode === "create") {
-          return {
-            ...state,
-            rows: [action.product, ...state.rows],
-            total: state.total + 1,
-          };
-        }
-        return {
-          ...state,
-          rows: state.rows.map((p) => (p.id === action.product.id ? action.product : p)),
-        };
-      }
-      case "remove":
-        return {
-          ...state,
-          rows: state.rows.filter((p) => p.id !== action.id),
-          total: Math.max(0, state.total - 1),
-        };
-      default:
-        return state;
-    }
-  }
-
   const [{ rows, total, loading, error }, dispatch] = useReducer(reducer, initialState);
 
-  // Fetch when query changes
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    rows.forEach((p) => {
+      if (p.category) set.add(p.category);
+    });
+    return Array.from(set).sort();
+  }, [rows]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -118,6 +146,19 @@ export function ProductsPage() {
     };
   }, [q, sortBy, order, take, skip]);
 
+  const filteredRows = useMemo(() => {
+    const min = priceMin ? Number(priceMin) : null;
+    const max = priceMax ? Number(priceMax) : null;
+
+    return rows.filter((p) => {
+      if (category && (p.category ?? "").toLowerCase() !== category.toLowerCase()) return false;
+      if (brand && !(p.brand ?? "").toLowerCase().includes(brand.toLowerCase())) return false;
+      if (min !== null && p.price < min) return false;
+      if (max !== null && p.price > max) return false;
+      return true;
+    });
+  }, [rows, category, brand, priceMin, priceMax]);
+
   const canShowMore = rows.length < total;
 
   function toggleSort(field: string) {
@@ -132,92 +173,187 @@ export function ProductsPage() {
   const titleSortMark = sortBy === "title" ? (order === "asc" ? " ↑" : " ↓") : "";
   const priceSortMark = sortBy === "price" ? (order === "asc" ? " ↑" : " ↓") : "";
 
-  const viewRows = useMemo(() => rows, [rows]);
+  const desktopFilters = (
+    <div className="hidden md:flex flex-wrap items-center gap-3">
+      {/* Search */}
+      <div className="relative w-[240px]">
+        <Input
+          placeholder="Search products..."
+          value={q}
+          onChange={(e) => qs.set({ q: e.target.value, skip: 0 })}
+          className="h-10 pr-9"
+        />
+        {q && (
+          <button
+            type="button"
+            onClick={() => qs.set({ q: "", skip: 0 })}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            aria-label="Clear search"
+            title="Clear"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
 
-  const filteredRows = useMemo(() => {
-    const min = priceMin ? Number(priceMin) : null;
-    const max = priceMax ? Number(priceMax) : null;
+      {/* Category */}
+      <div className="relative w-[210px]">
+        <Select
+          value={category ? category : ALL_CATEGORIES}
+          onValueChange={(v) => qs.set({ category: v === ALL_CATEGORIES ? "" : v, skip: 0 })}
+        >
+          <SelectTrigger className="h-10">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL_CATEGORIES}>All categories</SelectItem>
+            {categories.map((c) => (
+              <SelectItem key={c} value={c}>
+                {c}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-    return rows.filter((p) => {
-      if (category && (p.category ?? "").toLowerCase() !== category.toLowerCase()) return false;
-      if (brand && !(p.brand ?? "").toLowerCase().includes(brand.toLowerCase())) return false;
-      if (min !== null && p.price < min) return false;
-      if (max !== null && p.price > max) return false;
-      return true;
-    });
-  }, [rows, category, brand, priceMin, priceMax]);
+        {category && (
+          <button
+            type="button"
+            onClick={() => qs.set({ category: "", skip: 0 })}
+            className="absolute right-10 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            aria-label="Reset category"
+            title="Reset"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Brand */}
+      <div className="relative w-[170px]">
+        <Input
+          placeholder="Brand"
+          value={brand}
+          onChange={(e) => qs.set({ brand: e.target.value, skip: 0 })}
+          className="h-10 pr-9"
+        />
+        {brand && (
+          <button
+            type="button"
+            onClick={() => qs.set({ brand: "", skip: 0 })}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            aria-label="Clear brand"
+            title="Clear"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Price min */}
+      <div className="relative w-[130px]">
+        <Input
+          type="number"
+          placeholder="Min price"
+          value={priceMin}
+          onChange={(e) => qs.set({ priceMin: e.target.value, skip: 0 })}
+          className="h-10 pr-9"
+        />
+        {priceMin && (
+          <button
+            type="button"
+            onClick={() => qs.set({ priceMin: "", skip: 0 })}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            aria-label="Clear min price"
+            title="Clear"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Price max */}
+      <div className="relative w-[130px]">
+        <Input
+          type="number"
+          placeholder="Max price"
+          value={priceMax}
+          onChange={(e) => qs.set({ priceMax: e.target.value, skip: 0 })}
+          className="h-10 pr-9"
+        />
+        {priceMax && (
+          <button
+            type="button"
+            onClick={() => qs.set({ priceMax: "", skip: 0 })}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            aria-label="Clear max price"
+            title="Clear"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  const mobileFiltersRow = (
+    <div className="md:hidden flex items-center gap-3">
+      <div className="relative flex-1">
+        <Input
+          placeholder="Search products..."
+          value={q}
+          onChange={(e) => qs.set({ q: e.target.value, skip: 0 })}
+          className="h-10 pr-9"
+        />
+        {q && (
+          <button
+            type="button"
+            onClick={() => qs.set({ q: "", skip: 0 })}
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            aria-label="Clear search"
+            title="Clear"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      <Button variant="outline" className="h-10" onClick={() => setFiltersOpen(true)}>
+        <SlidersHorizontal className="h-4 w-4 mr-2" />
+        Filters
+      </Button>
+    </div>
+  );
+
+  const currentFilters: ProductsFiltersDraft = { category, brand, priceMin, priceMax };
 
   return (
-    <div className="border-b pb-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="text-xl font-semibold">Products</div>
-        <div className="text-sm text-muted-foreground">
-          Loaded {rows.length} / {total}. Shown {filteredRows.length}.
+    <div className="pb-4 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <div className="text-xl font-semibold">Products</div>
+          <div className="text-sm text-muted-foreground">Manage your digital products.</div>
         </div>
+
         <Button
+          className="bg-blue-600 text-white hover:bg-blue-700"
           onClick={() => {
             setEditing(null);
             setUpsertOpen(true);
           }}
         >
-          Create product
+          <Plus className="h-4 w-4 mr-2 text-white" />
+          Add Product
         </Button>
       </div>
 
-      {/* Рядок 2 — Пошук + фільтри */}
-      <div className="flex flex-wrap items-end gap-2">
-        <Input
-          value={q}
-          onChange={(e) => qs.set({ q: e.target.value, skip: 0 })}
-          placeholder="Search..."
-          className="w-64"
-        />
-
-        <Input
-          value={category}
-          onChange={(e) => qs.set({ category: e.target.value, skip: 0 })}
-          placeholder="Category"
-          className="w-48"
-        />
-
-        <Input
-          value={brand}
-          onChange={(e) => qs.set({ brand: e.target.value, skip: 0 })}
-          placeholder="Brand"
-          className="w-48"
-        />
-
-        <Input
-          inputMode="numeric"
-          value={priceMin}
-          onChange={(e) => qs.set({ priceMin: e.target.value, skip: 0 })}
-          placeholder="Price min"
-          className="w-32"
-        />
-
-        <Input
-          inputMode="numeric"
-          value={priceMax}
-          onChange={(e) => qs.set({ priceMax: e.target.value, skip: 0 })}
-          placeholder="Price max"
-          className="w-32"
-        />
-
-        <Button
-          variant="outline"
-          onClick={() =>
-            qs.set({ q: "", category: "", brand: "", priceMin: "", priceMax: "", skip: 0 })
-          }
-        >
-          Reset
-        </Button>
-      </div>
+      {mobileFiltersRow}
+      {desktopFilters}
 
       {error && <div className="text-sm text-red-600">{error}</div>}
 
-      <div className="border rounded-lg overflow-hidden bg-background">
+      <div className="border overflow-hidden bg-background">
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-muted/40">
             <TableRow>
               <TableHead className="w-16">ID</TableHead>
               <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("title")}>
@@ -234,8 +370,8 @@ export function ProductsPage() {
           </TableHeader>
 
           <TableBody>
-            {viewRows.map((p) => (
-              <TableRow key={p.id}>
+            {filteredRows.map((p) => (
+              <TableRow key={p.id} className="hover:bg-muted/40">
                 <TableCell>{p.id}</TableCell>
                 <TableCell>{p.title}</TableCell>
                 <TableCell>${p.price}</TableCell>
@@ -245,31 +381,38 @@ export function ProductsPage() {
                 <TableCell>
                   <div className="flex gap-2">
                     <Button
-                      size="sm"
-                      variant="outline"
+                      size="icon"
+                      variant="ghost"
+                      className="hover:bg-transparent"
+                      title="Edit"
+                      aria-label="Edit"
                       onClick={() => {
                         setEditing(p);
                         setUpsertOpen(true);
                       }}
                     >
-                      Edit
+                      <Pencil className="h-4 w-4 text-blue-600 hover:text-blue-700 transition-colors" />
                     </Button>
+
                     <Button
-                      size="sm"
-                      variant="destructive"
+                      size="icon"
+                      variant="ghost"
+                      className="hover:bg-transparent"
+                      title="Delete"
+                      aria-label="Delete"
                       onClick={() => {
                         setDeleting(p);
                         setDeleteOpen(true);
                       }}
                     >
-                      Delete
+                      <Trash2 className="h-4 w-4 text-red-600 hover:text-red-700 transition-colors" />
                     </Button>
                   </div>
                 </TableCell>
               </TableRow>
             ))}
 
-            {!loading && viewRows.length === 0 && (
+            {!loading && filteredRows.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                   Nothing found
@@ -280,11 +423,51 @@ export function ProductsPage() {
         </Table>
       </div>
 
-      <div className="flex justify-end">
-        <Button onClick={showMore} disabled={!canShowMore || loading}>
+      <div className="mt-6 flex items-center justify-center gap-2 text-sm">
+        <span className="text-muted-foreground">
+          Loaded {rows.length} / {total}. Shown {filteredRows.length}
+        </span>
+
+        <button
+          type="button"
+          onClick={showMore}
+          disabled={!canShowMore || loading}
+          className={[
+            "font-semibold",
+            !canShowMore || loading
+              ? "text-muted-foreground cursor-not-allowed"
+              : "text-blue-600 hover:underline",
+          ].join(" ")}
+        >
           Show more
-        </Button>
+        </button>
       </div>
+
+      {/* Mobile Filters Dialog (separate file) */}
+      <ProductsFiltersDialog
+        open={filtersOpen}
+        onOpenChange={setFiltersOpen}
+        categories={categories}
+        value={currentFilters}
+        onApply={(next) => {
+          qs.set({
+            category: next.category,
+            brand: next.brand,
+            priceMin: next.priceMin,
+            priceMax: next.priceMax,
+            skip: 0,
+          });
+        }}
+        onReset={() => {
+          qs.set({
+            category: "",
+            brand: "",
+            priceMin: "",
+            priceMax: "",
+            skip: 0,
+          });
+        }}
+      />
 
       <UpsertProductDialog
         open={upsertOpen}

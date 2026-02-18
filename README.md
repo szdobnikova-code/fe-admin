@@ -1,8 +1,31 @@
 # Simple Admin Dashboard
 
+![Vite](https://img.shields.io/badge/Vite-5.x-646CFF?logo=vite)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript)
+![MobX](https://img.shields.io/badge/MobX-6-FF9955?logo=mobx)
+![Tailwind](https://img.shields.io/badge/TailwindCSS-3.x-38B2AC?logo=tailwindcss)
+![FSD](https://img.shields.io/badge/Architecture-FSD-black)
+
 Frontend test assignment – February 2026
 
 A scalable admin dashboard built with **Feature-Sliced Design (FSD)** and modern React tooling.
+
+---
+
+## Screenshots
+
+### Login Page
+
+![Login](./public/screenshots/login.png)
+
+### Products Page
+
+![Products](./public/screenshots/products.png)
+
+### Product Modal
+
+![Modal](./public/screenshots/modal.png)
 
 ---
 

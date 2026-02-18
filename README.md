@@ -15,22 +15,16 @@ A scalable admin dashboard built with **Feature-Sliced Design (FSD)** and modern
 
 ## Screenshots
 
-### Login Page
-
 <p align="center">
-  <img src="./public/screenshots/login.png" width="820" alt="Login page" />
+  <img src="./public/screenshots/login.png" width="500" alt="Login page" />
 </p>
 
-### Products Page
-
 <p align="center">
-  <img src="./public/screenshots/products.png" width="1100" alt="Products page with search, filters and sorting" />
+  <img src="./public/screenshots/products.png" width="750" alt="Products page with search, filters and sorting" />
 </p>
 
-### Product Modal (Create / Edit)
-
 <p align="center">
-  <img src="./public/screenshots/modal.png" width="760" alt="Product create and edit modal dialog" />
+  <img src="./public/screenshots/modal.png" width="500" alt="Product create and edit modal dialog" />
 </p>
 
 ---
